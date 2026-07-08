@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    
+    <PackageId>Pkaczma.ScreenBorderDrawer</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Patryk Kaczmarek</Authors>
+    <Description>A thread-safe library for drawing transparent overlay borders from console applications.</Description>
+  </PropertyGroup>
+</Project>
