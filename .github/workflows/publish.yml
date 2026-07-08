@@ -1,0 +1,28 @@
+name: Publish to NuGet
+
+# This tells GitHub to run this script whenever you push to the 'main' branch
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build_and_publish:
+    runs-on: windows-latest # Required for Windows Forms/net8.0-windows
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Build the project
+      run: dotnet build --configuration Release
+
+    - name: Pack the project into a .nupkg
+      run: dotnet pack --configuration Release --no-build --output ./nupkg
+
+    - name: Push to NuGet.org
+      run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
