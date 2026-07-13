@@ -5,39 +5,39 @@ namespace ScreenBorderDrawer;
 public class ScreenBorderController : IDisposable
 {
     private readonly ConcurrentDictionary<Guid, ScreenBorderOverlay> _activeOverlays = new();
-    private WindowsFormsSynchronizationContext _syncContext;
-    private Thread _uiThread;
-    private ManualResetEvent _uiReady = new ManualResetEvent(false);
+    private WindowsFormsSynchronizationContext syncContext;
+    private Thread uiThread;
+    private ManualResetEvent uiReady = new ManualResetEvent(false);
 
     public ScreenBorderController()
     {   
-        _syncContext = new();
-        _uiThread = new(_ =>
+        syncContext = new();
+        uiThread = new(_ =>
         {
             Application.EnableVisualStyles();
             ApplicationContext context = new();
             SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
-            _syncContext = (WindowsFormsSynchronizationContext?)SynchronizationContext.Current??throw new Exception("Sync context not created");
+            syncContext = (WindowsFormsSynchronizationContext?)SynchronizationContext.Current??throw new Exception("Sync context not created");
 
-            _uiReady.Set();
+            uiReady.Set();
             Application.Run(context);
         })
         {
             IsBackground = true
         };
-        _uiThread.SetApartmentState(ApartmentState.STA);
-        _uiThread.Start();
+        uiThread.SetApartmentState(ApartmentState.STA);
+        uiThread.Start();
 
-        _uiReady.WaitOne();
+        uiReady.WaitOne();
     }
-    public async Task<Guid> CreateBorderAsync(Point location, Size size, Color? borderColor = null, int width = 2)
+    public async Task<Guid> CreateBorderAsync(Point location, Size size, Color? borderColor = null, int width = 2, string labelText = "")
     {
         if(width <= 0) throw new ArgumentOutOfRangeException(nameof(width), "Overlay's border width must be greater than 0.");
         Guid guid = Guid.NewGuid();
 
-        _syncContext.Send(_ =>
+        syncContext.Send(_ =>
         {
-            ScreenBorderOverlay overlay = new(location, size, borderColor??Color.White, width);
+            ScreenBorderOverlay overlay = new(location, size, borderColor??Color.White, width, labelText);
             
             _activeOverlays.TryAdd(guid, overlay);
 
@@ -57,19 +57,19 @@ public class ScreenBorderController : IDisposable
             throw new KeyNotFoundException($"Overlay with guid {borderGuid} doesn't exist.");
         }
 
-        _syncContext.Post(_ =>
+        syncContext.Post(_ =>
         {
             overlay?.Close();
         }, null);
     }
     public async Task<IntPtr> GetBorderHandleAsync(Guid borderGuid)
     {
-        return (await _GetBorderFormAsync(borderGuid)).hWnd;
+        return (await _GetBorderFormAsync(borderGuid)).Handle;
     }
     public async Task SetBorderSizeAsync(Guid borderGuid, Size size)
     {
         ScreenBorderOverlay borderForm = await _GetBorderFormAsync(borderGuid);
-        _syncContext.Post(_ =>
+        syncContext.Post(_ =>
         {
             borderForm.PositionWindow(borderForm.Location, size);
         }, null);
@@ -77,26 +77,36 @@ public class ScreenBorderController : IDisposable
     public async Task SetBorderLocationAsync(Guid borderGuid, Point location)
     {
         ScreenBorderOverlay borderForm = await _GetBorderFormAsync(borderGuid);
-        _syncContext.Post(_ =>
+        syncContext.Post(_ =>
         {
-            borderForm.PositionWindow(location, borderForm.Size);
+            borderForm.PositionWindow(location, borderForm.ClientSize);
         },null);
     }
     public async Task SetBorderColorAsync(Guid borderGuid, Color color)
     {
         ScreenBorderOverlay borderForm = await _GetBorderFormAsync(borderGuid);
-        _syncContext.Post(_ =>
+        syncContext.Post(_ =>
         {
-            borderForm.BackColor = color;
+            borderForm.BorderColor = color;
         },null);
     }
     public async Task SetBorderWidthAsync(Guid borderGuid, int borderWidth)
     {
         if(borderWidth <= 0) throw new ArgumentOutOfRangeException(nameof(borderWidth), "Overlay's border width must be greater than 0.");
+        if(borderWidth > 10) throw new ArgumentOutOfRangeException(nameof(borderWidth), "Overlay's border width must be less than 10.");
         ScreenBorderOverlay borderForm = await _GetBorderFormAsync(borderGuid);
-        _syncContext.Post(_ =>
+        syncContext.Post(_ =>
         {
-            borderForm.Padding = new(borderWidth);
+            borderForm.BorderWidth = borderWidth;
+        },null);
+    }
+
+    public async Task SetBorderLabelAsync(Guid borderGuid, string label)
+    {
+        ScreenBorderOverlay borderForm = await _GetBorderFormAsync(borderGuid);
+        syncContext.Post(_ =>
+        {
+            borderForm.LabelText = label;
         },null);
     }
 
@@ -114,7 +124,7 @@ public class ScreenBorderController : IDisposable
         {
             RemoveBorder(guid);
         }
-        _syncContext?.Send(_ => Application.ExitThread(), null);
-        if(_uiThread != null && _uiThread.IsAlive) _uiThread.Join(1000);
+        syncContext?.Send(_ => Application.ExitThread(), null);
+        if(uiThread != null && uiThread.IsAlive) uiThread.Join(1000);
     }
 }
